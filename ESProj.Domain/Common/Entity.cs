@@ -1,0 +1,11 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ESProj.Domain.Common;
+public abstract class Entity<TKey> where TKey : ValueObject
+{
+  public TKey Id { get; protected set; }
+}
