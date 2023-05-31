@@ -19,8 +19,8 @@ public static class WarehouseProductAPI
 	{
 		app.MapGet("/api/warehouseproduct/{warehouseProductId}", GetWarehouseProductById);
 		app.MapPost("/api/warehouseproduct/Create/{warehouseId}/{productId}", CreateWarehouseProduct);
-		app.MapGet("/api/warehouseproduct/{warehouseProductId}/addquantity/{quantity}", AddQuantityToWarehouseProduct);
-		app.MapGet("/api/warehouseproduct/{warehouseProductId}/removequantity/{quantity}", RemoveQuantityToWarehouseProduct);
+		app.MapPost("/api/warehouseproduct/{warehouseProductId}/addquantity/{quantity}", AddQuantityToWarehouseProduct);
+		app.MapPost("/api/warehouseproduct/{warehouseProductId}/removequantity/{quantity}", RemoveQuantityToWarehouseProduct);
 	}
 
 	private static async Task<IResult> GetWarehouseProductById([FromServices]ISender mediator, Guid warehouseProductId)
