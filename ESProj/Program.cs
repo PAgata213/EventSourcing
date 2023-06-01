@@ -12,6 +12,7 @@ builder.Services.AddMediatR(o =>
 {
   o.RegisterServicesFromAssembly(typeof(ESProj.Domain.DI).Assembly);
 });
+builder.Services.AddAutoMapper(typeof(ESProj.Infrastructure.DI).Assembly);
 
 var app = builder.Build();
 

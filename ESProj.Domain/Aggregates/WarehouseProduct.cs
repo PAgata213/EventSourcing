@@ -5,8 +5,8 @@ using ESProj.Domain.VO;
 namespace ESProj.Domain.Aggregates;
 public class WarehouseProduct : AggregateRoot<WarehouseProductId>
 {
-	public WarehouseId WarehouseId { get; private set; }
-	public ProductId ProductId { get; private set; }
+	public WarehouseId WarehouseId { get; protected set; }
+	public ProductId ProductId { get; protected set; }
 	public int Quantity { get; private set; } = 0;
 
 	public static WarehouseProduct Create(WarehouseId warehouseId, ProductId productId)

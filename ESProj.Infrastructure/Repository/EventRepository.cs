@@ -1,28 +1,29 @@
-﻿using System.Text.Json;
+﻿using System.Text;
+
+using AutoMapper;
 
 using ESProj.Domain.Common;
+using ESProj.Infrastructure.Common;
 
 using EventStore.Client;
+using Newtonsoft.Json;
 
 namespace ESProj.Infrastructure.Repository;
 
-internal class EventRepository(EventStoreClient _client) : IEventRepository
+internal class EventRepository(EventStoreClient _client, IMapper _mapper) : IEventRepository
 {
-	public async Task<T?> Get<T, TKey>(string streamName)
+	public async Task<T?> Get<T, TKey, TSnapshot>(string streamName)
 		where T : AggregateRoot<TKey>, new()
 		where TKey : ValueObject
+		where TSnapshot : AggregateSnapshot
 	{
-		var aggregate = await GetSnapshotOrDefault<T, TKey>(streamName);
-
-		if(aggregate == null)
-		{
-			aggregate = new T();
-		}
+		var aggregateSnapshot = await GetAggregateSnapshotOrDefault<TSnapshot>(streamName);
+		var aggregate = _mapper.Map<T>(aggregateSnapshot) ?? new T();
 
 		var readStreamResult = _client.ReadStreamAsync(Direction.Forwards, streamName, StreamPosition.FromInt64(aggregate.Version));
 		var eventsData = await readStreamResult.ToListAsync();
 
-		if((eventsData?.Count ?? 0) == 0)
+		if(aggregateSnapshot == null && (eventsData?.Count ?? 0) == 0)
 		{
 			return null;
 		}
@@ -31,7 +32,7 @@ internal class EventRepository(EventStoreClient _client) : IEventRepository
 		{
 			var eventType = Type.GetType(@eventData.Event.EventType);
 			ArgumentNullException.ThrowIfNull(eventType);
-			var @event = JsonSerializer.Deserialize(@eventData.Event.Data.Span, eventType);
+			var @event = JsonConvert.DeserializeObject(Encoding.UTF8.GetString(@eventData.Event.Data.Span), eventType);
 			ArgumentNullException.ThrowIfNull(@event);
 			aggregate.When((DomainEvent)@event);
 		}
@@ -39,16 +40,17 @@ internal class EventRepository(EventStoreClient _client) : IEventRepository
 		return aggregate;
 	}
 
-	public async Task Save<T, TKey>(string streamName, T aggregate)
+	public async Task Save<T, TKey, TSnapshot>(string streamName, T aggregate)
 		where T : AggregateRoot<TKey>, new()
 		where TKey : ValueObject
+		where TSnapshot : AggregateSnapshot
 	{
 		var events = aggregate.GetEvents();
 		var eventData = events.Select(@event =>
 		{
 			var eventType = @event.GetType();
-			var data = JsonSerializer.SerializeToUtf8Bytes(@event, eventType);
-			return new EventData(Uuid.NewUuid(), eventType.AssemblyQualifiedName!, data);
+			var data = JsonConvert.SerializeObject(@event);
+			return new EventData(Uuid.NewUuid(), eventType.AssemblyQualifiedName!, Encoding.UTF8.GetBytes(data));
 		});
 
 		await _client.AppendToStreamAsync(streamName, StreamState.Any, eventData);
@@ -57,15 +59,14 @@ internal class EventRepository(EventStoreClient _client) : IEventRepository
 		{
 			if(@event.Version % 5 == 0)
 			{
-				await CreateSnapshot<T, TKey>(streamName, aggregate);
+				await CreateAggregateSnapshot<T, TKey, TSnapshot>(streamName, aggregate);
 				break;
 			}
 		}
 	}
 
-	private async Task<T?> GetSnapshotOrDefault<T, TKey>(string streamName)
-		where T : AggregateRoot<TKey>, new()
-		where TKey : ValueObject
+	private async Task<TSnapshot?> GetAggregateSnapshotOrDefault<TSnapshot>(string streamName)
+		where TSnapshot : AggregateSnapshot
 	{
 		var readStreamResult = _client.ReadStreamAsync(Direction.Backwards, GetSnapshotStreamName(streamName), StreamPosition.End, 1);
 		if(await readStreamResult.ReadState == ReadState.StreamNotFound)
@@ -78,20 +79,21 @@ internal class EventRepository(EventStoreClient _client) : IEventRepository
 			return null;
 		}
 
-		return JsonSerializer.Deserialize<T>(spanshotData![0].Event.Data.Span);
+		return JsonConvert.DeserializeObject<TSnapshot>(Encoding.UTF8.GetString(spanshotData![0].Event.Data.Span));
 	}
 
-	private async Task CreateSnapshot<T, TKey>(string streamName, T aggregate)
+	private async Task CreateAggregateSnapshot<T, TKey, TSnapshot>(string streamName, T aggregate)
 		where T : AggregateRoot<TKey>, new()
 		where TKey : ValueObject
+		where TSnapshot : AggregateSnapshot
 	{
 		var aggregateType = aggregate.GetType();
-		var data = JsonSerializer.SerializeToUtf8Bytes(aggregate, aggregateType);
-		var eventData = new EventData(Uuid.NewUuid(), aggregateType.AssemblyQualifiedName!, data);
+		var data = JsonConvert.SerializeObject(_mapper.Map<TSnapshot>(aggregate));
+		var eventData = new EventData(Uuid.NewUuid(), typeof(TSnapshot).AssemblyQualifiedName!, Encoding.UTF8.GetBytes(data));
 
 		await _client.AppendToStreamAsync(GetSnapshotStreamName(streamName), StreamState.Any, new[] { eventData });
 	}
 
-	private string GetSnapshotStreamName(string streamName)
+	private static string GetSnapshotStreamName(string streamName)
 		=> $"{streamName}-snapshot";
 }
