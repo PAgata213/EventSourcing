@@ -10,7 +10,7 @@ public static class DI
   public static void Register(this IServiceCollection services)
   {
     var settings = EventStoreClientSettings
-    .Create("esdb://localhost:2113?tls=false&keepAliveTimeout=10000&keepAliveInterval=10000");
+    .Create("esdb://esdb-node:2113?tls=false&keepAliveTimeout=10000&keepAliveInterval=10000");
     var client = new EventStoreClient(settings);
 
     services
